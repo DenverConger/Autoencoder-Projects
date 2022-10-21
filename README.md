@@ -16,3 +16,7 @@ install the libraries you need
 
 conda list --export > requirements.txt
 
+
+# Creating A Face dataset
+https://github.com/ageitgey/face_recognition
+
