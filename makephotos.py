@@ -1,6 +1,6 @@
 #Limited is better than nothing.
 import cv2
-vidcap = cv2.VideoCapture('/home/denmann99/autoencoder/videos/denver/20221103_182417.mp4')
+vidcap = cv2.VideoCapture('/home/denmann99/autoencoder/videos/bryan/VID_20221103_175452276.mp4')
 success,image = vidcap.read()
 count = 0
 while success:
@@ -12,4 +12,6 @@ while success:
   success,image = vidcap.read()
   print('Read a new frame: ', success)
   count += 1
+  
+print("Conversion Done")
   
