@@ -12,15 +12,14 @@ import matplotlib.pyplot as plt
 from tensorflow.keras import backend as K
 import tqdm as tqdm
 from tensorflow.python.framework.ops import disable_eager_execution
-disable_eager_execution()
 gpus = tf.config.list_logical_devices('GPU')
 mirrored_strategy = tf.distribute.MirroredStrategy(devices=gpus,cross_device_ops=tf.distribute.HierarchicalCopyAllReduce())
 
 
-BATCH_SIZE = 1
+BATCH_SIZE = 3
 with mirrored_strategy.scope():
-    training_dir = "/home/congds/class_proj/autoencoder/pics/bryan1"
-    training_dir_uch = "/home/congds/class_proj/autoencoder/pics/uchtdorf1"
+    training_dir = "autoencoder/pics/bryan1"
+    training_dir_uch = "autoencoder/pics/uchtdorf1"
     image_size = (256, 256)
     
 
@@ -50,14 +49,14 @@ with mirrored_strategy.scope():
             subset="training",
             batch_size=BATCH_SIZE,
             class_mode=None,
-            color_mode="rgb",
+            color_mode="grayscale",
             seed=42,shuffle=True)
     validation_generator = validation_datagen.flow_from_directory(
             training_dir,
             target_size=image_size,
             batch_size=BATCH_SIZE,
             class_mode=None,
-            color_mode="rgb",
+            color_mode="grayscale",
             subset="validation",
             seed=42)
 
@@ -69,35 +68,23 @@ with mirrored_strategy.scope():
             subset="training",
             batch_size=BATCH_SIZE,
             class_mode=None,
-            color_mode="rgb",
+            color_mode="grayscale",
             seed=42,shuffle=True)
     validation_generator_uch = validation_datagen.flow_from_directory(
             training_dir_uch,
             target_size=image_size,
             batch_size=BATCH_SIZE,
             class_mode=None,
-            color_mode="rgb",
+            color_mode="grayscale",
             subset="validation",
             seed=42)
     
      
-    latent_space_dim = 256
-    input_shape=(256,256,3)
-    class Sampling(tf.keras.layers.Layer):
-        """Uses (encoder_mu, encoder_log_variance) to sample encoder, the vector encoding a digit."""
-
-        def call(self, inputs):
-            encoder_mu, encoder_log_variance = inputs
-            batch = tf.shape(encoder_mu)[0]
-            dim = tf.shape(encoder_mu)[1]
-            epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
-            return encoder_mu + tf.exp(0.5 * encoder_log_variance) * epsilon
+    latent_space_dim = 32
+    input_shape=(256,256,1)
     '''encoder'''
     encoder_input = tf.keras.layers.Input(shape=input_shape)
-    net = tf.keras.layers.Conv2D(filters=1, kernel_size=(3, 3), padding="same", strides=1)(encoder_input)
-    net = tf.keras.layers.BatchNormalization()(net)
-    net = tf.keras.layers.LeakyReLU()(net)
-    net = tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3), padding="same", strides=1)(net)
+    net = tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3), padding="same", strides=1)(encoder_input)
     net = tf.keras.layers.BatchNormalization()(net)
     net = tf.keras.layers.LeakyReLU()(net)
     net = tf.keras.layers.Conv2D(filters=64, kernel_size=(3,3), padding="same", strides=2)(net)
@@ -151,7 +138,7 @@ with mirrored_strategy.scope():
 with mirrored_strategy.scope():
     def discriminator():
         model = tf.keras.Sequential()
-        model.add(tf.keras.layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same',input_shape=[256, 256, 3]))
+        model.add(tf.keras.layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same',input_shape=[256, 256, 1]))
         model.add(tf.keras.layers.LeakyReLU())
         model.add(tf.keras.layers.Dropout(0.3))
 
@@ -193,7 +180,7 @@ with mirrored_strategy.scope():
     discriminator_optimizer = tf.keras.optimizers.Adam(1e-4)
     
 
-    checkpoint_dir = '/home/congds/class_proj/autoencoder/checkpoints/train/'
+    checkpoint_dir = 'autoencoder/checkpoints/'
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                      discriminator_optimizer=discriminator_optimizer,
@@ -201,18 +188,18 @@ with mirrored_strategy.scope():
                                      D=D)
     
 
-    EPOCHS = 1
+    EPOCHS = 50
     num_examples_to_generate = BATCH_SIZE
 
     # You will reuse this seed overtime (so it's easier)
     # to visualize progress in the animated GIF)
-    seed = tf.random.normal([num_examples_to_generate,256,256,3])
+    seed = tf.random.normal([num_examples_to_generate,256,256,1])
     
     
 
     @tf.function
     def train_step(images):
-        noise = tf.random.normal([BATCH_SIZE, 256,256,3])
+        noise = tf.random.normal([BATCH_SIZE, 256,256,1])
 
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
             generated_images = G(noise, training=True)
@@ -228,6 +215,7 @@ with mirrored_strategy.scope():
 
         generator_optimizer.apply_gradients(zip(gradients_of_generator, G.trainable_variables))
         discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, D.trainable_variables))
+    @tf.function
     def generate_and_save_images(model, epoch, test_input):
       # Notice `training` is set to False.
       # This is so all layers run in inference mode (batchnorm).
@@ -257,21 +245,22 @@ with mirrored_strategy.scope():
 
             # Produce images for the GIF as you go
             # display.clear_output(wait=True)
+            print("got to generate image")
             generate_and_save_images(G,
                                      epoch + 1,
                                      seed)
-
+            print("done generating image")
         # Save the model every 15 epochs
             if (epoch + 1) % 15 == 0:
                 checkpoint.save(file_prefix = checkpoint_prefix)
 
             print ('Time for epoch {} is {} sec'.format(epoch + 1, time.time()-start))
 
-          # Generate after the final epoch
-    # display.clear_output(wait=True)
-        generate_and_save_images(G,epochs,seed)
-    
-    
+            # Generate after the final epoch
+            # display.clear_output(wait=True)
+            generate_and_save_images(G,epochs,seed)
 train(train_generator_uch, EPOCHS)
+encoder.save('gann_encoder.h5')
+decoder.save('gann_decoder.h5')
 G.save("generator.h5")
 D.save("discriminator.h5")
